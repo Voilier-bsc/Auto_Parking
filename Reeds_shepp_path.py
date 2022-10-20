@@ -224,7 +224,6 @@ def left_straight_right(x, y, phi):
 
 
 def generate_path(q0, q1, max_curvature, step_size):
-    print(q0)
     dx = q1[0] - q0[0]
     dy = q1[1] - q0[1]
     dth = q1[2] - q0[2]
@@ -232,8 +231,6 @@ def generate_path(q0, q1, max_curvature, step_size):
     s = math.sin(q0[2])
     x = (c * dx + s * dy) * max_curvature
     y = (-s * dx + c * dy) * max_curvature
-    print(x)
-    print(y)
     paths = []
     paths = straight_curve_straight(x, y, dth, paths, step_size)
     paths = curve_straight_curve(x, y, dth, paths, step_size)

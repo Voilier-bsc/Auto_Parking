@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+from math import cos, sin, tan, pi
+from scipy.spatial.transform import Rotation as Rot
 
 # Vehicle parameters
 LENGTH = 4.5  # [m]
@@ -21,7 +23,14 @@ DT = 0.1
 
 LF = LENGTH - BACKTOWHEEL
 LB = BACKTOWHEEL
+
+RearToCen = (LF - LB) / 2.0
 VEHICLE_RAD = np.hypot((LF + LB) / 2.0, WIDTH / 2.0)
+
+MAX_CURVATURE = math.tan(MAX_STEER) / WB
+
+VRX = [LF, LF, -LB, -LB, LF]
+VRY = [WIDTH / 2, -WIDTH / 2, -WIDTH / 2, WIDTH / 2, WIDTH / 2]
 
 class Vehicle:
     def __init__(self, x=0.0, y=0.0, yaw=0.0, v=0.0):
@@ -32,7 +41,6 @@ class Vehicle:
         self.predelta = None
         
     def plot_car(self, steer=0.0, truckcolor="-k"):
-        
         outline = np.array([[-BACKTOWHEEL, (LENGTH - BACKTOWHEEL), (LENGTH - BACKTOWHEEL), -BACKTOWHEEL, -BACKTOWHEEL],
                         [WIDTH / 2, WIDTH / 2, - WIDTH / 2, -WIDTH / 2, WIDTH / 2]])
 
@@ -87,7 +95,6 @@ class Vehicle:
         plt.plot(self.x, self.y, "*")
     
     def update_state(self, a, delta):
-
         if delta >= MAX_STEER:
             delta = MAX_STEER
         elif delta <= -MAX_STEER:
@@ -104,12 +111,93 @@ class Vehicle:
             self.v = MIN_SPEED
             
             
-# veh = Vehicle(x=5, y=5, yaw=0.0, v=0.0)
-# plt.show()
-# for i in range(300):
-#     plt.clf()
-#     veh.update_state(a=0.1, delta=i*0.1)
-#     veh.plot_car(steer= i*0.1)
+def check_vehicle_collision(x, y, yaw, obstacle_list, kd_tree, AB=None):
+    if isinstance(x, float):
+        cx = x + RearToCen * cos(yaw)
+        cy = y + RearToCen * sin(yaw)
+        # plt.plot(cx, cy, "xb")
+        # print(cx, cy)
+        ids = kd_tree.query_ball_point([cx, cy], VEHICLE_RAD)
+        if not ids:
+            return True  # no collision
+        
+        ox = np.array(obstacle_list)[:,0]
+        oy = np.array(obstacle_list)[:,1]
+            
+        if not rectangle_check(x, y, yaw, [ox[i] for i in ids], [oy[i] for i in ids]):
+            # print("coll")
+            return False # collision
+        
+        return True
     
-#     plt.pause(0.1)
+    else:
+        for i_x, i_y, i_yaw in zip(x, y, yaw):
+            cx = i_x + RearToCen * cos(i_yaw)
+            cy = i_y + RearToCen * sin(i_yaw)
+            # print(cx, cy)
+            ids = kd_tree.query_ball_point([cx, cy], VEHICLE_RAD)
+            if not ids:
+                return True  # no collision
+            
+            ox = np.array(obstacle_list)[:,0]
+            oy = np.array(obstacle_list)[:,1]
+            
+            if not rectangle_check(i_x, i_y, i_yaw, [ox[i] for i in ids], [oy[i] for i in ids]):
+                print("coll")
+                return False # collision
+        
+        return True
     
+def check_vehicle_narrow_collision(x, y, yaw, obstacle_list, kd_tree):
+    if isinstance(x, float):
+        cx = x + RearToCen * cos(yaw)
+        cy = y + RearToCen * sin(yaw)
+        # print(cx, cy)
+        ids = kd_tree.query_ball_point([cx, cy], VEHICLE_RAD)
+        if not ids:
+            return True  # no collision
+        
+        
+        ox = np.array(obstacle_list)[:,0]
+        oy = np.array(obstacle_list)[:,1]
+        
+        
+        if not rectangle_check(x, y, yaw, [ox[i] for i in ids], [oy[i] for i in ids]):
+            return False # collision
+        
+        return True
+    
+    else:
+        for i_x, i_y, i_yaw in zip(x, y, yaw):
+            cx = i_x + RearToCen * cos(i_yaw)
+            cy = i_y + RearToCen * sin(i_yaw)
+            # print(cx, cy)
+            ids = kd_tree.query_ball_point([cx, cy], VEHICLE_RAD)
+            if not ids:
+                return True  # no collision
+            
+            ox = np.array(obstacle_list)[:,0]
+            oy = np.array(obstacle_list)[:,1]
+            
+            if not rectangle_check(i_x, i_y, i_yaw, [ox[i] for i in ids], [oy[i] for i in ids]):
+                print("coll")
+                return False # collision
+        
+        return True
+    
+def rectangle_check(x, y, yaw, ox, oy):
+    # transform obstacles to base link frame
+    rot = rot_mat_2d(yaw)
+    for iox, ioy in zip(ox, oy):
+        tx = iox - x
+        ty = ioy - y
+        converted_xy = np.stack([tx, ty]).T @ rot
+        rx, ry = converted_xy[0], converted_xy[1]
+
+        if not (rx > LF or rx < -LB or ry > WIDTH / 2.0 or ry < -WIDTH / 2.0):
+            return False  # no collision
+
+    return True  # collision
+            
+def rot_mat_2d(angle):
+    return Rot.from_euler('z', angle).as_matrix()[0:2, 0:2]
