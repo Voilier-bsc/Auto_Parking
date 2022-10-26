@@ -10,24 +10,22 @@ from scipy.spatial import cKDTree
 from math import cos, sin, tan, pi
 
 from sklearn import neighbors
-from sqlalchemy import between, false, true
+from sqlalchemy import false, true
 
 import Vehicle
 import Environment as Env
-import Clothoid_path
 
 N_STEER = 20
-SB_COST = 1  # switch back penalty cost
-BACK_COST = 0  # backward penalty cost
+SB_COST = 0  # switch back penalty cost
+BACK_COST = 1  # backward penalty cost
 STEER_CHANGE_COST = 0.1 # steer angle change penalty cost
 # global STEER_COST=5  # steer angle change penalty cost
 
-D_WEIGHT = 1.2
+D_WEIGHT = 1
 
-NODE_DIST_AB = 0.5 #m
-NODE_ANGLE_AB = 3 #deg
-BETWEEN_DIST_COST = 5
-BETWEEN_ANGLE_COST = 3 #deg
+NODE_DIST_AB = 1 #m
+NODE_ANGLE_AB = 2 #deg
+
 class Global_Node:
     def __init__(self, x_ind, y_ind, yaw_ind, direction,
                  x, y, yaw, steering_angle=0.0, parent_node=None, cost=None):
@@ -53,7 +51,7 @@ class Global_Path:
         self.cost = cost
         
 ### H_Connect
-def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_on=False):
+def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list):
     obstacle_kd_tree = cKDTree(np.array(obstacle_list))
     
     start_node = Global_Node(round(start_pos[0]), round(start_pos[1]), round(start_pos[2] / Env.YAW_RES), True, start_pos[0], start_pos[1], start_pos[2], cost = 0)
@@ -83,10 +81,6 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_
     Near_node_A, Near_node_B = None, None
     global STEER_COST
     STEER_COST = 0.5
-    
-    between_path = None
-    
-    
     while True:
 
         if not OpenList_A or not OpenList_B:
@@ -109,21 +103,16 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_
         
         # print(target_node.cost)
 
-        between_path = generate_clothoid_path(current_node_A, current_node_B, obstacle_list, obstacle_kd_tree)
-        if between_path is not None:
-            break
-        
-        
+
         # plt.plot(current_node_A.x, current_node_A.y, "xc")
-        if(display_on):
-            plt.arrow(current_node_A.x, current_node_A.y, 0.5*cos(current_node_A.yaw),0.5*sin(current_node_A.yaw), head_width=0.5)
-            plt.arrow(current_node_B.x, current_node_B.y, 0.5*cos(current_node_B.yaw),0.5*sin(current_node_B.yaw), head_width=0.5 )
-            plt.pause(0.001)
+        
+        plt.arrow(current_node_A.x, current_node_A.y, 0.5*cos(current_node_A.yaw),0.5*sin(current_node_A.yaw), head_width=0.5)
+        plt.arrow(current_node_B.x, current_node_B.y, 0.5*cos(current_node_B.yaw),0.5*sin(current_node_B.yaw), head_width=0.5 )
         # plt.plot(current_node_B.x, current_node_B.y, "xc")
         # veh = Vehicle.Vehicle(x = current_node.x, y =current_node.y, yaw=current_node.yaw, v=0.0)
         # veh.plot_car(0)
         
-           
+        plt.pause(0.001)
         
 
         #### break if 문 설정####
@@ -153,7 +142,7 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_
             
             if neighbor not in OpenList_A or OpenList_A[neighbor_ind].cost > neighbor.cost:
                 
-                if choose_near_node(neighbor, current_node_B):
+                if(calc_heuristic_cost(neighbor, current_node_B) < 10 and Flag==False):
                     Flag = True
                     Near_node_B = current_node_B
                     Near_node_A = current_node_A
@@ -175,7 +164,7 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_
             
             if neighbor not in OpenList_B or OpenList_B[neighbor_ind].cost > neighbor.cost:
                 # heapq.heappush(priority_q_B, (calc_cost(neighbor, start_node), neighbor_ind))
-                if choose_near_node(neighbor, current_node_A):
+                if(calc_heuristic_cost(neighbor, current_node_A) < 10 and Flag==False):
                     Flag = True
                     Near_node_B = current_node_B
                     Near_node_A = current_node_A
@@ -188,36 +177,9 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_
                 OpenList_B[neighbor_ind] = neighbor
             
     
-    path = get_final_path(ClosedList_A, ClosedList_B, current_node_A, current_node_B, connect_node, AB, between_path)
+    path = get_final_path(ClosedList_A, ClosedList_B, current_node_A, current_node_B, connect_node, AB)
     
     return path
-
-def generate_clothoid_path(current_node_A, current_node_B,obstacle_list, obstacle_kd_tree):
-    a = Clothoid_path.Point(current_node_A.x,current_node_A.y)
-    b = Clothoid_path.Point(current_node_B.x,current_node_B.y)
-    a_yaw = current_node_A.yaw
-    b_yaw = current_node_B.yaw
-    clothoid_path = Clothoid_path.generate_clothoid_path(a,a_yaw,b,b_yaw,15)
-    
-    for i in range(len(clothoid_path)-1):
-        dx = clothoid_path[i+1].x - clothoid_path[i].x
-        dy = clothoid_path[i+1].y - clothoid_path[i].y
-        yaw = math.atan2(dy,dx)
-        if Vehicle.check_vehicle_collision(clothoid_path[i].x - Vehicle.WB*cos(yaw), clothoid_path[i].y - Vehicle.WB*sin(yaw), yaw, obstacle_list, obstacle_kd_tree)==False:
-            return None
-    
-    return clothoid_path 
-
-#     goal_point = Point(10, 0)
-#     # goal_orientation_list = np.linspace(-pi, pi, 75)
-
-def choose_near_node(neighbor_node, current_node):
-
-    if calc_heuristic_cost(neighbor_node, current_node) <= BETWEEN_DIST_COST:
-        if calc_angle_dist(neighbor_node, current_node) <= BETWEEN_ANGLE_COST:
-            return True
-        
-    return False
 
 def calc_connect_node(ClosedList_A, ClosedList_B, current_node_A, current_node_B):
     for node_A in ClosedList_A.values():
@@ -247,25 +209,18 @@ def calc_connect_node(ClosedList_A, ClosedList_B, current_node_A, current_node_B
         
     return False, None, None
 
-def get_final_path(ClosedList_A, ClosedList_B, current_node_A, current_node_B, connected_node, AB, clothoid_path):
+def get_final_path(ClosedList_A, ClosedList_B, current_node_A, current_node_B, connected_node, AB):
     if AB=="A":
         node_ind_A = (connected_node.x_ind, connected_node.y_ind, connected_node.yaw_ind)
         node_ind_B = (current_node_B.parent_node.x_ind, current_node_B.parent_node.y_ind, current_node_B.parent_node.yaw_ind)
     
-    elif AB=="B":
+    else:
         node_ind_A = (current_node_A.parent_node.x_ind, current_node_A.parent_node.y_ind, current_node_A.parent_node.yaw_ind)
         node_ind_B = (connected_node.x_ind, connected_node.y_ind, connected_node.yaw_ind)
-    
-    else:
-        node_ind_A = (current_node_A.x_ind, current_node_A.y_ind, current_node_A.yaw_ind)
-        node_ind_B = (current_node_B.x_ind, current_node_B.y_ind, current_node_B.yaw_ind)
-        
-    
     final_cost = current_node_A.cost + current_node_B.cost
     
     final_A_x, final_A_y, final_A_yaw, final_A_dir = [], [], [], []
     final_B_x, final_B_y, final_B_yaw, final_B_dir = [], [], [], []
-    between_x, between_y, between_yaw, between_dir = [], [], [], []
     
     while node_ind_A:
         node = ClosedList_A[node_ind_A]
@@ -288,22 +243,11 @@ def get_final_path(ClosedList_A, ClosedList_B, current_node_A, current_node_B, c
         if(node.parent_node == None):
             break
         node_ind_B = (node.parent_node.x_ind, node.parent_node.y_ind, node.parent_node.yaw_ind)
-
-    for i in range(len(clothoid_path)-1):
-        dx = clothoid_path[i+1].x - clothoid_path[i].x
-        dy = clothoid_path[i+1].y - clothoid_path[i].y
-        yaw = math.atan2(dy,dx)
-
-        between_x.append(clothoid_path[i].x)
-        between_y.append(clothoid_path[i].y)
-        between_yaw.append(yaw)
-        between_dir.append(True)
-    
-    
-    final_x = list(reversed(final_A_x)) + between_x + list(final_B_x)
-    final_y = list(reversed(final_A_y)) + between_y + list(final_B_y)
-    final_yaw = list(reversed(final_A_yaw)) + between_yaw + list(final_B_yaw)
-    final_direction = list(reversed(final_A_dir)) + between_dir + list(final_B_dir)
+        
+    final_x = list(reversed(final_A_x)) + list(final_B_x)
+    final_y = list(reversed(final_A_y)) + list(final_B_y)
+    final_yaw = list(reversed(final_A_yaw)) + list(final_B_yaw)
+    final_direction = list(reversed(final_A_dir)) + list(final_B_dir)
     
     final_direction[0] = final_direction[1]
     path = Global_Path(final_x,final_y,final_yaw,final_direction,final_cost)

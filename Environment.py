@@ -23,6 +23,8 @@ YAW_RES = np.deg2rad(10.0)
 
 GLOBAL_TARGET_POS_DIS = 8
 
+START_POSE_LIST = [[3,3,90],[3,25,-90],[25,3,90],[25,25,-90]]
+
 class parking_slot:
     def __init__(self, slot_id, start_x, start_y):
         self.id = slot_id
@@ -35,6 +37,7 @@ class parking_slot:
         self.slot_list = []
         self.obs_list = []
         
+        self.target = False
         self.full = False
         self.aisle_pos = None
         
@@ -64,14 +67,8 @@ class Environment_1:
         self.ymin = ymin
         self.xmax = xmax
         self.ymax = ymax
-    
-        self.target_x = 0
-        self.target_y = 0
-        self.target_yaw = 0
-        ## for global planning
-        self.global_target_x = 0
-        self.global_target_y = 0
-        self.global_target_yaw = 0
+
+        self.vehicle_list = []
         
     def append_wall(self, start_x, start_y, width, height):
         iter_i = np.arange(start_x, start_x+width, 0.1)
@@ -85,8 +82,9 @@ class Environment_1:
             self.obstacle_list.append([start_x,j])
             self.obstacle_list.append([start_x+width,j])
                 
-    def create_parking_slot(self, num_slot, start_x, start_y, start_slot=0, aisle_pos="up"):
+    def create_parking_slot(self, num_slot, start_x, start_y, target_slot_num_list, start_slot=0, aisle_pos="up"):
         for n in range(num_slot):
+            
             new_slot = parking_slot(n+start_slot, start_x, start_y)
             new_slot.aisle_pos=aisle_pos
             iter_i = np.arange(start_x, start_x + PARKINGLOT_L, 0.1)
@@ -100,7 +98,10 @@ class Environment_1:
                 for i in iter_i:
                     slot_obs.append([i,start_y])
             
-            if(random.randint(0,1)==1):
+            if new_slot.id in target_slot_num_list:
+                new_slot.target = True
+            
+            if(random.randint(0,1)==1 and new_slot.target==False):
                 new_slot.append_car()
                 new_slot.full=True
                 self.obstacle_list = self.obstacle_list + new_slot.obs_list
@@ -110,55 +111,50 @@ class Environment_1:
             
             start_x = start_x + PARKINGLOT_L
             
-    def create_world_1(self):
+    def create_world(self, num_agent=1, parking_dir='front'):
         self.append_wall(self.xmin,self.ymin,self.xmax,self.ymax)
-        self.create_parking_slot(num_slot=6, start_x=PARKINGLOT_AISLE, start_y=PARKINGLOT_AISLE, aisle_pos="up")
-        self.create_parking_slot(num_slot=6, start_x=PARKINGLOT_AISLE, start_y=PARKINGLOT_AISLE*2 + PARKINGLOT_H + 5, start_slot=6, aisle_pos="down")
-        while(True):
-            rand_num = random.randint(0,len(self.parking_slot_list)-1)
-            if(self.parking_slot_list[rand_num].full == False):
-                self.target_x = self.parking_slot_list[rand_num].center_x
-                
+        sample_list = list(range(0,12))
+        target_slot_num_list = random.sample(sample_list, num_agent)
+        
 
-                if self.parking_slot_list[rand_num].aisle_pos == "up":
-                    self.target_y = self.parking_slot_list[rand_num].center_y + Vehicle.BACKTOWHEEL
-                    
-                    self.global_target_x = self.parking_slot_list[rand_num].center_x
-                    self.global_target_y = self.parking_slot_list[rand_num].center_y + GLOBAL_TARGET_POS_DIS
+        self.create_parking_slot(6, PARKINGLOT_AISLE, PARKINGLOT_AISLE, target_slot_num_list, aisle_pos="up")
+        self.create_parking_slot(6, PARKINGLOT_AISLE, PARKINGLOT_AISLE*2 + PARKINGLOT_H + 5, target_slot_num_list, start_slot=6, aisle_pos="down")
+        target_slot_num_list.sort()
+        for i, target_slot_id in enumerate(target_slot_num_list):
+            veh = Vehicle.Vehicle(x = START_POSE_LIST[i][0], y =START_POSE_LIST[i][1], yaw=np.deg2rad(START_POSE_LIST[i][2]), v=0.0)
+            veh.global_target_x = self.parking_slot_list[target_slot_id].center_x
+            
+            if self.parking_slot_list[target_slot_id].aisle_pos == "up":
+                if parking_dir=='front':
+                    veh.global_target_y = self.parking_slot_list[target_slot_id].center_y - Vehicle.WB/2
+                    veh.global_target_yaw = np.deg2rad(-90)
                 else:
-                    
-                    self.target_y = self.parking_slot_list[rand_num].center_y - Vehicle.BACKTOWHEEL
-                    self.global_target_x = self.parking_slot_list[rand_num].center_x
-                    self.global_target_y = self.parking_slot_list[rand_num].center_y - GLOBAL_TARGET_POS_DIS
-                    
-                break
+                    veh.global_target_y = self.parking_slot_list[target_slot_id].center_y + Vehicle.WB/2
+                    veh.global_target_yaw = np.deg2rad(90)
+            else:
+                if parking_dir=='front':
+                    veh.global_target_y = self.parking_slot_list[target_slot_id].center_y + Vehicle.WB/2
+                    veh.global_target_yaw = np.deg2rad(90)
+                else:  
+                    veh.global_target_y = self.parking_slot_list[target_slot_id].center_y - Vehicle.WB/2
+                    veh.global_target_yaw = np.deg2rad(-90)
+
+            self.vehicle_list.append(veh)
         
         
     def plot_world(self, global_path=None):
-        
         for parking_slot in self.parking_slot_list:
             plt.plot(np.array(parking_slot.slot_list)[:,0], np.array(parking_slot.slot_list)[:,1], '.g')
             
         plt.plot(np.array(self.obstacle_list)[:,0], np.array(self.obstacle_list)[:,1], '.k')
-        plt.plot(self.target_x, self.target_y, '-o')
+        
+        for veh in self.vehicle_list:
+            veh.plot_car()
+
         plt.pause(0.01)
         # plt.plot(self.global_target_x, self.global_target_y, '-p')
         if global_path is not None:
             plt.plot(global_path.x_list,global_path.y_list, '.b')
-            for x,y,yaw in zip(global_path.x_list, global_path.y_list, global_path.yaw_list):
-                veh_1 = Vehicle.Vehicle(x=x, y=y, yaw=yaw, v=0.0)
-                veh_1.plot_car(0)
-            
-            
-        
-
-# env_1 = Environment_1(XMIN,YMIN,XMAX,YMAX)
-# env_1.create_world_1()
-# plt.clf()
-# env_1.plot_world()
-# veh_1 = Vehicle.Vehicle(x=3, y=3, yaw=math.radians(90), v=0.0)
-# veh_1.plot_car(0)
-# plt.grid()
-# plt.show()
-
-
+            # for x,y,yaw in zip(global_path.x_list, global_path.y_list, global_path.yaw_list):
+                # veh_1 = Vehicle.Vehicle(x=x-Vehicle.WB*math.cos(yaw), y=y-Vehicle.WB*math.sin(yaw), yaw=yaw, v=0.0)
+                # veh_1.plot_car(0)

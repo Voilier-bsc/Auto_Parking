@@ -79,7 +79,7 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list):
         # veh = Vehicle.Vehicle(x = current_node.x, y =current_node.y, yaw=current_node.yaw, v=0.0)
         # veh.plot_car(0)
         
-        # plt.pause(0.001)
+        plt.pause(0.001)
         
         
         if calc_heuristic_cost(current_node, target_node) <= 0.5:

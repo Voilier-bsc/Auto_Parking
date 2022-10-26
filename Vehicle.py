@@ -13,7 +13,7 @@ WHEEL_WIDTH = 0.2  # [m]
 TREAD = 0.7  # [m]
 WB = 2.5  # [m]
 
-MAX_STEER = np.deg2rad(45.0)  # maximum steering angle [rad]
+MAX_STEER = np.deg2rad(30.0)  # maximum steering angle [rad]
 MAX_DSTEER = np.deg2rad(30.0)  # maximum steering speed [rad/s]
 MAX_SPEED = 55.0 / 3.6  # maximum speed [m/s]
 MIN_SPEED = -20.0 / 3.6  # minimum speed [m/s]
@@ -40,7 +40,21 @@ class Vehicle:
         self.v = v
         self.predelta = None
         
+        self.front_x = self.x + WB*cos(self.yaw)
+        self.front_y = self.y + WB*sin(self.yaw)
+        
+        self.target_x = None
+        self.target_y = None
+        self.target_yaw = None
+        
+        self.global_target_x = None
+        self.global_target_y = None
+        self.global_target_yaw = None
+        
+        
     def plot_car(self, steer=0.0, truckcolor="-k"):
+        
+        
         outline = np.array([[-BACKTOWHEEL, (LENGTH - BACKTOWHEEL), (LENGTH - BACKTOWHEEL), -BACKTOWHEEL, -BACKTOWHEEL],
                         [WIDTH / 2, WIDTH / 2, - WIDTH / 2, -WIDTH / 2, WIDTH / 2]])
 
@@ -93,6 +107,8 @@ class Vehicle:
         plt.plot(np.array(rl_wheel[0, :]).flatten(),
                     np.array(rl_wheel[1, :]).flatten(), truckcolor)
         plt.plot(self.x, self.y, "*")
+        
+        plt.plot(self.global_target_x, self.global_target_y, '-o')
     
     def update_state(self, a, delta):
         if delta >= MAX_STEER:
@@ -104,13 +120,16 @@ class Vehicle:
         self.y = self.y + self.v * math.sin(self.yaw) * DT
         self.yaw = self.yaw + self.v / WB * math.tan(delta) * DT
         self.v = self.v + a * DT
+        
+        self.front_x = self.x + WB*cos(self.yaw)
+        self.fornt_y = self.y + WB*sin(self.yaw)
 
         if self.v > MAX_SPEED:
             self.v = MAX_SPEED
         elif self.v < MIN_SPEED:
             self.v = MIN_SPEED
             
-            
+## 뒷바퀴 기준 collision check 진행
 def check_vehicle_collision(x, y, yaw, obstacle_list, kd_tree, AB=None):
     if isinstance(x, float):
         cx = x + RearToCen * cos(yaw)
@@ -194,7 +213,7 @@ def rectangle_check(x, y, yaw, ox, oy):
         converted_xy = np.stack([tx, ty]).T @ rot
         rx, ry = converted_xy[0], converted_xy[1]
 
-        if not (rx > LF or rx < -LB or ry > WIDTH / 2.0 or ry < -WIDTH / 2.0):
+        if not (rx > LF or rx < -LB or ry > WIDTH / 2.0 + 0.4 or ry < -WIDTH / 2.0 - 0.4):
             return False  # no collision
 
     return True  # collision
