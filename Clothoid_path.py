@@ -6,6 +6,7 @@ from scipy.optimize import fsolve
 from math import atan2, cos, hypot, pi, sin
 from matplotlib import animation
 import time
+import Vehicle
 Point = namedtuple("Point", ["x", "y"])
 
 show_animation = True
@@ -39,8 +40,14 @@ def generate_clothoid_path(start_point, start_yaw,
         # Step2: Calculate path parameters
         L = compute_path_length(r, phi1, delta, A)
         curvature = compute_curvature(delta, A, L)
-        print(curvature)
+        # # print( Vehicle.MAX_CURVATURE)
+        # if (abs(curvature) >= Vehicle.MAX_CURVATURE):
+            # print("nope")
+            # return None
+        # else:
+            # print("accept_curvature : ", curvature)
         curvature_rate = compute_curvature_rate(A, L)
+        print(curvature_rate)
     except Exception as e:
         print(f"Failed to generate clothoid points: {e}")
         return None

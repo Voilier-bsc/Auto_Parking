@@ -167,24 +167,16 @@ def check_vehicle_collision(x, y, yaw, obstacle_list, kd_tree, AB=None):
         
         return True
     
-def check_vehicle_narrow_collision(x, y, yaw, obstacle_list, kd_tree):
+def check_vehicle_wide_collision(x, y, yaw, kd_tree):
     if isinstance(x, float):
         cx = x + RearToCen * cos(yaw)
         cy = y + RearToCen * sin(yaw)
         # print(cx, cy)
-        ids = kd_tree.query_ball_point([cx, cy], VEHICLE_RAD)
+        ids = kd_tree.query_ball_point([cx, cy], VEHICLE_RAD+1)
         if not ids:
             return True  # no collision
         
-        
-        ox = np.array(obstacle_list)[:,0]
-        oy = np.array(obstacle_list)[:,1]
-        
-        
-        if not rectangle_check(x, y, yaw, [ox[i] for i in ids], [oy[i] for i in ids]):
-            return False # collision
-        
-        return True
+        return False
     
     else:
         for i_x, i_y, i_yaw in zip(x, y, yaw):
@@ -195,14 +187,7 @@ def check_vehicle_narrow_collision(x, y, yaw, obstacle_list, kd_tree):
             if not ids:
                 return True  # no collision
             
-            ox = np.array(obstacle_list)[:,0]
-            oy = np.array(obstacle_list)[:,1]
-            
-            if not rectangle_check(i_x, i_y, i_yaw, [ox[i] for i in ids], [oy[i] for i in ids]):
-                print("coll")
-                return False # collision
-        
-        return True
+        return False
     
 def rectangle_check(x, y, yaw, ox, oy):
     # transform obstacles to base link frame

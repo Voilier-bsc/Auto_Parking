@@ -1,16 +1,12 @@
 import heapq
 import math
 import os
-from pathlib import Path
 import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial import cKDTree
 from math import cos, sin, tan, pi
-
-from sklearn import neighbors
-from sqlalchemy import between, false, true
 
 import Vehicle
 import Environment as Env
@@ -193,18 +189,19 @@ def Global_Hybrid_A_star_Planning(start_pos, target_pos, obstacle_list, display_
     return path
 
 def generate_clothoid_path(current_node_A, current_node_B,obstacle_list, obstacle_kd_tree):
+    num_point = math.ceil(calc_heuristic_cost(current_node_A,current_node_B))
     a = Clothoid_path.Point(current_node_A.x,current_node_A.y)
     b = Clothoid_path.Point(current_node_B.x,current_node_B.y)
     a_yaw = current_node_A.yaw
     b_yaw = current_node_B.yaw
-    clothoid_path = Clothoid_path.generate_clothoid_path(a,a_yaw,b,b_yaw,15)
-    
-    for i in range(len(clothoid_path)-1):
-        dx = clothoid_path[i+1].x - clothoid_path[i].x
-        dy = clothoid_path[i+1].y - clothoid_path[i].y
-        yaw = math.atan2(dy,dx)
-        if Vehicle.check_vehicle_collision(clothoid_path[i].x - Vehicle.WB*cos(yaw), clothoid_path[i].y - Vehicle.WB*sin(yaw), yaw, obstacle_list, obstacle_kd_tree)==False:
-            return None
+    clothoid_path = Clothoid_path.generate_clothoid_path(a,a_yaw,b,b_yaw,num_point)
+    if clothoid_path is not None:
+        for i in range(len(clothoid_path)-1):
+            dx = clothoid_path[i+1].x - clothoid_path[i].x
+            dy = clothoid_path[i+1].y - clothoid_path[i].y
+            yaw = math.atan2(dy,dx)
+            if Vehicle.check_vehicle_wide_collision(clothoid_path[i].x - Vehicle.WB*cos(yaw), clothoid_path[i].y - Vehicle.WB*sin(yaw), yaw, obstacle_kd_tree)==False:
+                return None
     
     return clothoid_path 
 
